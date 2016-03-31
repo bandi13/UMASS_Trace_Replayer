@@ -95,8 +95,8 @@ stats_t getStats(char *fn) {
 double runTX(FILE *fh,uint64_t offset, uint64_t size, bool isRead, char *buf) {
 	auto startTime = std::chrono::steady_clock::now();
 	if(fseek(fh,offset,SEEK_SET)) return -1;
-	if(isRead) { if(fread(buf,size,1,fh) != size) return -1; }
-	else       { if(fwrite(buf,size,1,fh) != size) return -1; }
+	if(isRead) { if(fread(buf,1,size,fh) != size) return -1; }
+	else       { if(fwrite(buf,1,size,fh) != size) return -1; }
 	std::chrono::duration<double,std::micro> ret = std::chrono::steady_clock::now() - startTime;
 	return ret.count();
 }
@@ -104,6 +104,9 @@ double runTX(FILE *fh,uint64_t offset, uint64_t size, bool isRead, char *buf) {
 using namespace std;
 int main(int argc, char *argv[]) {
 	if(argc < 3) { printf("Usage: %s <traceFile> <device> [timeOut]\n",argv[0]); return 1; }
+
+	FILE *fh = fopen(argv[2],"w+");
+	if(!fh) { cerr << "Cannot open: " << argv[2] << endl; return -1; }
 
 	stats_t stats = getStats(argv[1]);
 
@@ -125,10 +128,10 @@ int main(int argc, char *argv[]) {
 		for(uint64_t i = stats.largestSIZE; i; i--) *(bigBufPtr++) = (char)rand();
 	}
 
-	std::ifstream file(argv[1]);
-	FILE *fh = fopen(argv[2],"w+");
 	uint64_t timeOut = -1;
 	if(argc > 3) { timeOut = atoi(argv[3]); cout << "setting timeout=" << timeOut << " seconds" << endl; }
+
+	std::ifstream file(argv[1]);
 	CSVRow curRow;
 	uint64_t curASU;
 	uint64_t curLBA;
