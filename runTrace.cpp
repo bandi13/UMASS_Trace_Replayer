@@ -81,14 +81,13 @@ stats_t getStats(char *fn) {
 		{
 			curTIME = atof(curRow[TIME].c_str());
 			if(curTIME > ret.largestTIME) ret.largestTIME = curTIME;
-			ret.deltaT += curTIME - lastTIME;
+			ret.deltaT = (ret.deltaT + curTIME - lastTIME) / 2;
 			lastTIME = curTIME;
 		}
 		if((curRow[OPCODE][0] == 'R') || (curRow[OPCODE][0] == 'r')) ret.numReads++;
 		ret.numTX++;
 
 	}
-	if(ret.numTX) ret.deltaT /= ret.numTX;
 	return ret;
 }
 
@@ -108,7 +107,9 @@ int main(int argc, char *argv[]) {
 	FILE *fh = fopen(argv[2],"w+");
 	if(!fh) { cerr << "Cannot open: " << argv[2] << endl; return -1; }
 
+	auto startTime = std::chrono::steady_clock::now();
 	stats_t stats = getStats(argv[1]);
+	cout << "Initialization complete. Took " << std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - startTime).count() << " seconds." << endl;
 
 	cout << "Largest ASU=" << stats.largestASU << " offset=" << stats.largestLBA << " size=" << stats.largestSIZE << " time=" << stats.largestTIME << endl;
 	cout << "numREAD=" << stats.numReads << " numTX=" << stats.numTX << " deltaT=" << stats.deltaT << endl;
@@ -116,6 +117,8 @@ int main(int argc, char *argv[]) {
 	cout << "Minimum disk size: " << stats.largestASU * stats.largestOffset / (1024*1024*1024) << "GB" << endl;
 	cout << "Estimated runtime: " << floor(stats.largestTIME / (60*60)) << "h " << (uint64_t)floor(stats.largestTIME / 60)%60 << 'm' << endl;
 	cout << "Avg TX per second: " << stats.numTX / stats.largestTIME << endl;
+	cout << "Avg arrival rate : " << stats.largestTIME / stats.numTX << endl;
+	cout << "Avg arrival rate : " << stats.deltaT / stats.largestTIME << endl;
 	cout << "Read/Write ratio : " << (double)stats.numReads / (stats.numTX - stats.numReads) << endl;
 	cout << "Percent Read     : " << (double)stats.numReads / stats.numTX << endl;
 	cout << "Percent Writes   : " << (1 - (double)stats.numReads / stats.numTX) << endl;
@@ -139,7 +142,8 @@ int main(int argc, char *argv[]) {
 	double curTIME;
 	double curDuration;
 	double totDuration = 0;
-	auto startTime = std::chrono::steady_clock::now();
+	uint64_t numTX = 0;
+	startTime = std::chrono::steady_clock::now();
 	while(file >> curRow) {
 		curASU = atoi(curRow[ASU].c_str());
 		curLBA = atoi(curRow[LBA].c_str());
@@ -150,7 +154,10 @@ int main(int argc, char *argv[]) {
 		curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get());
 		if(curDuration < 0) { cerr << "Error with TX(" << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << "): " << strerror(errno) << endl; break; }
 		totDuration += curDuration;
+		numTX++;
 	}
-	cout << "total duration: " << totDuration << endl;
+	cout << "total duration: " << totDuration << "us" << endl;
+	cout << "avg duration: " << totDuration / numTX << "us" << endl;
+	cout << "numTX=" << numTX << endl;
 	return 0;
 }
