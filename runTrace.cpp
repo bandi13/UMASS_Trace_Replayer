@@ -91,13 +91,16 @@ stats_t getStats(char *fn) {
 	return ret;
 }
 
-double runTX(FILE *fh,uint64_t offset, uint64_t size, bool isRead, char *buf) {
+int64_t runTX(FILE *fh,uint64_t offset, uint64_t size, bool isRead, char *buf, std::chrono::steady_clock::time_point beginTime) {
 	auto startTime = std::chrono::steady_clock::now();
+	if(beginTime > startTime) {
+		std::this_thread::sleep_until(beginTime);
+		startTime = std::chrono::steady_clock::now();
+	}
 	if(fseek(fh,offset,SEEK_SET)) return -1;
 	if(isRead) { if(fread(buf,1,size,fh) != size) return -1; }
 	else       { if(fwrite(buf,1,size,fh) != size) return -1; }
-	std::chrono::duration<double,std::micro> ret = std::chrono::steady_clock::now() - startTime;
-	return ret.count();
+	return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTime).count();
 }
 
 using namespace std;
@@ -131,33 +134,38 @@ int main(int argc, char *argv[]) {
 		for(uint64_t i = stats.largestSIZE; i; i--) *(bigBufPtr++) = (char)rand();
 	}
 
-	uint64_t timeOut = -1;
-	if(argc > 3) { timeOut = atoi(argv[3]); cout << "setting timeout=" << timeOut << " seconds" << endl; }
+	uint64_t timeOut = UINT64_MAX;
+	if(argc > 3) { timeOut = atoi(argv[3]); cout << "setting timeout=" << timeOut << " seconds" << endl; timeOut = timeOut*1000*1000; }
 
 	std::ifstream file(argv[1]);
+	string ofn(argv[1]);
+	ofn.append(".log");
+	std::ofstream outFile(ofn);
 	CSVRow curRow;
 	uint64_t curASU;
 	uint64_t curLBA;
 	uint64_t curSIZE;
-	double curTIME;
-	double curDuration;
-	double totDuration = 0;
+	uint64_t curTIME;
+	int64_t curDuration;
+	int64_t totDuration = 0;
 	uint64_t numTX = 0;
 	startTime = std::chrono::steady_clock::now();
 	while(file >> curRow) {
 		curASU = atoi(curRow[ASU].c_str());
 		curLBA = atoi(curRow[LBA].c_str());
 		curSIZE = atoi(curRow[SIZE].c_str());
-		curTIME = atof(curRow[TIME].c_str());
-		if((timeOut > 0) && (curTIME > timeOut)) { cout << "Timeout reached." << endl; break; }
-		std::this_thread::sleep_until(startTime + std::chrono::microseconds((uint64_t)(curTIME*1000*1000)));
-		curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get());
+		curTIME = atof(curRow[TIME].c_str())*1000*1000;
+		if(curTIME > timeOut) { cout << "Timeout reached." << endl; break; }
+		curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get(), startTime + std::chrono::microseconds(curTIME));
 		if(curDuration < 0) { cerr << "Error with TX(" << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << "): " << strerror(errno) << endl; break; }
-		totDuration += curDuration;
+		else totDuration += curDuration;
+		outFile << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << ',' << curDuration << endl;
 		numTX++;
 	}
 	cout << "total duration: " << totDuration << "us" << endl;
 	cout << "avg duration: " << totDuration / numTX << "us" << endl;
 	cout << "numTX=" << numTX << endl;
+	file.close();
+	outFile.close();
 	return 0;
 }
