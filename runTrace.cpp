@@ -189,7 +189,7 @@ int main(int argc, char *argv[]) {
 	cout << "total duration   : " << totDuration << "us" << endl;
 	cout << "avg duration     : " << totDuration / numTX << "us" << endl;
 	cout << "avg speed        : " << totSpeed / (1024*1024*numTX) << "MB/s" << endl;
-//	cout << "numTX=" << numTX << " bytesRead=" << bytesRead << " bytesWritten=" << bytesWritten << endl;
+	cout << "numTX=" << numTX << " read=" << (double)bytesRead/(1024*1024) << "MB wrote=" << (double)bytesWritten/(1024*1024) << "MB" << endl;
 	file.close();
 	outFile.close();
 	return 0;
