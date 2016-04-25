@@ -27,6 +27,7 @@
 #include <memory>
 #include <string.h>
 #include <thread>
+#include <iomanip>
 
 // class stolen from: http://stackoverflow.com/questions/1120140/how-can-i-read-and-parse-csv-files-in-c
 class CSVRow {
@@ -107,7 +108,11 @@ int64_t runTX(FILE *fh,uint64_t offset, uint64_t size, bool isRead, char *buf, s
 
 using namespace std;
 int main(int argc, char *argv[]) {
-	if(argc < 3) { printf("Usage: %s <traceFile> <device> [[timeIn] timeOut]\n",argv[0]); return 1; }
+	if(argc < 3) {
+		cout << "Usage: " << argv[0] << " <traceFile> <device> [[timeIn] timeOut]" << endl;
+		cout << "If timeOut < 0, then the transactions will be executed as quickly as possible." << endl;
+		return 1;
+	}
 
 	FILE *fh = fopen(argv[2],"w+");
 	if(!fh) { cerr << "Cannot open: " << argv[2] << endl; return -1; }
@@ -119,14 +124,16 @@ int main(int argc, char *argv[]) {
 	cout << "Largest ASU=" << stats.largestASU << " offset=" << stats.largestLBA << " size=" << stats.largestSIZE << " time=" << stats.largestTIME << endl;
 	cout << "numREAD=" << stats.numReads << " numTX=" << stats.numTX << " deltaT=" << stats.deltaT << endl;
 
-	cout << "Minimum disk size: " << stats.largestASU * stats.largestOffset / (1024*1024*1024) << "GB" << endl;
-	cout << "Estimated runtime: " << floor(stats.largestTIME / (60*60)) << "h " << (uint64_t)floor(stats.largestTIME / 60)%60 << 'm' << endl;
-	cout << "Avg TX per second: " << stats.numTX / stats.largestTIME << endl;
-	cout << "Avg arrival rate : " << stats.largestTIME / stats.numTX << endl;
-	cout << "Avg arrival rate : " << stats.deltaT / stats.largestTIME << endl;
-	cout << "Read/Write ratio : " << (double)stats.numReads / (stats.numTX - stats.numReads) << endl;
-	cout << "Percent Read     : " << (double)stats.numReads / stats.numTX << endl;
-	cout << "Percent Writes   : " << (1 - (double)stats.numReads / stats.numTX) << endl;
+	cout << fixed << setw(10) << setprecision(5);
+
+	cout << "Minimum disk size : " << (double)stats.largestASU * stats.largestOffset / (1024*1024*1024) << "GB" << endl;
+	cout << "Data file runtime : " << (uint64_t)floor(stats.largestTIME / (60*60)) << "h " << (uint64_t)floor(stats.largestTIME / 60)%60 << 'm' << endl;
+	cout << "Avg TX per second : " << stats.numTX / stats.largestTIME << endl;
+	cout << "Avg arrival rate  : " << stats.largestTIME / stats.numTX << endl;
+	cout << "True arrival rate : " << stats.deltaT << endl;
+	cout << "Read/Write ratio  : " << (double)stats.numReads / (stats.numTX - stats.numReads) << endl;
+	cout << "Percent Read      : " << 100*(double)stats.numReads / stats.numTX << endl;
+	cout << "Percent Writes    : " << 100*(1 - (double)stats.numReads / stats.numTX) << endl;
 
 	cout.flush();
 
@@ -136,18 +143,18 @@ int main(int argc, char *argv[]) {
 		for(uint64_t i = stats.largestSIZE; i; i--) *(bigBufPtr++) = (char)rand();
 	}
 
-	uint64_t timeIn = 0;
-	uint64_t timeOut = UINT64_MAX;
+	int64_t timeIn = 0;
+	int64_t timeOut = UINT64_MAX;
+	bool runFast = false;
 	if(argc > 3) {
-		timeOut = atoi(argv[3])*1000*1000;
+		timeOut = atol(argv[3])*1000*1000;
 		if(argc > 4) {
 			timeIn = timeOut;
-			timeOut = atoi(argv[3])*1000*1000;
+			timeOut = atol(argv[4])*1000*1000;
 		}
+		if(timeOut < 0) { runFast = true; timeOut *= -1; cout << "Fast run" << endl; }
 		cout << "Setting time range: " << (timeIn / (1000*1000)) << '-' << (timeOut / (1000*1000)) << endl;
 	}
-	bool runFast = false;
-	if(strcmp(argv[0],"runFast") == 0) runFast = true;
 
 	std::ifstream file(argv[1]);
 	string ofn(argv[1]);
@@ -160,6 +167,7 @@ int main(int argc, char *argv[]) {
 	uint64_t curTIME;
 	int64_t curDuration;
 	int64_t totDuration = 0;
+	double totSpeed = 0;
 	uint64_t numTX = 0;
 	startTime = std::chrono::steady_clock::now();
 	while(file >> curRow) {
@@ -167,19 +175,21 @@ int main(int argc, char *argv[]) {
 		curLBA = atoi(curRow[LBA].c_str());
 		curSIZE = atoi(curRow[SIZE].c_str());
 		curTIME = atof(curRow[TIME].c_str())*1000*1000;
-		if(curTIME < timeIn) continue;
-		if(curTIME > timeOut) { cout << "Timeout reached." << endl; break; }
+		if(curTIME < (uint64_t)timeIn) continue;
+		if(curTIME > (uint64_t)timeOut) { cout << "Timeout reached." << endl; break; }
 		if(runFast) curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get(), startTime);
 		else curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get(), startTime + std::chrono::microseconds(curTIME));
 		if(curDuration < 0) { cerr << "Error with TX(" << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << "): " << strerror(errno) << endl; break; }
-		else totDuration += curDuration;
+		totDuration += curDuration;
+		totSpeed += (double)curSIZE / curDuration;
 		outFile << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << ',' << curDuration << endl;
 		numTX++;
 	}
-	cout << "total duration: " << totDuration << "us" << endl;
-	cout << "avg duration: " << totDuration / numTX << "us" << endl;
-	cout << "numTX=" << numTX << " bytesRead=" << bytesRead << " bytesWritten=" << bytesWritten << endl;
-	cout << "program runtime: " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTime).count() << "us" << endl;
+	cout << "program runtime  : " << ((double)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count() / 1000) << "s" << endl;
+	cout << "total duration   : " << totDuration << "us" << endl;
+	cout << "avg duration     : " << totDuration / numTX << "us" << endl;
+	cout << "avg speed        : " << totSpeed / (1024*1024*numTX) << "MB/s" << endl;
+//	cout << "numTX=" << numTX << " bytesRead=" << bytesRead << " bytesWritten=" << bytesWritten << endl;
 	file.close();
 	outFile.close();
 	return 0;
