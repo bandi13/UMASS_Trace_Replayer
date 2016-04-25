@@ -146,6 +146,8 @@ int main(int argc, char *argv[]) {
 		}
 		cout << "Setting time range: " << (timeIn / (1000*1000)) << '-' << (timeOut / (1000*1000)) << endl;
 	}
+	bool runFast = false;
+	if(strcmp(argv[0],"runFast") == 0) runFast = true;
 
 	std::ifstream file(argv[1]);
 	string ofn(argv[1]);
@@ -167,7 +169,8 @@ int main(int argc, char *argv[]) {
 		curTIME = atof(curRow[TIME].c_str())*1000*1000;
 		if(curTIME < timeIn) continue;
 		if(curTIME > timeOut) { cout << "Timeout reached." << endl; break; }
-		curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get(), startTime + std::chrono::microseconds(curTIME));
+		if(runFast) curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get(), startTime);
+		else curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get(), startTime + std::chrono::microseconds(curTIME));
 		if(curDuration < 0) { cerr << "Error with TX(" << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << "): " << strerror(errno) << endl; break; }
 		else totDuration += curDuration;
 		outFile << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << ',' << curDuration << endl;
