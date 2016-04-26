@@ -72,9 +72,9 @@ stats_t getStats(char *fn) {
 	double curTIME;
 	double lastTIME = 0;
 	while(file >> curRow) {
-		curASU = atoi(curRow[ASU].c_str());
-		curLBA = atoi(curRow[LBA].c_str());
-		curSIZE = atoi(curRow[SIZE].c_str());
+		curASU = atol(curRow[ASU].c_str());
+		curLBA = atol(curRow[LBA].c_str());
+		curSIZE = atol(curRow[SIZE].c_str());
 		if(curASU > ret.largestASU) ret.largestASU = curASU;
 		if(curLBA > ret.largestLBA) ret.largestLBA = curLBA;
 		if(curSIZE > ret.largestSIZE) ret.largestSIZE = curSIZE;
@@ -157,9 +157,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	std::ifstream file(argv[1]);
-	string ofn(argv[1]);
-	ofn.append(".log");
-	std::ofstream outFile(ofn);
+//	string ofn(argv[1]);
+//	ofn.append(".log");
+//	std::ofstream outFile(ofn);
 	CSVRow curRow;
 	uint64_t curASU;
 	uint64_t curLBA;
@@ -171,9 +171,9 @@ int main(int argc, char *argv[]) {
 	uint64_t numTX = 0;
 	startTime = std::chrono::steady_clock::now();
 	while(file >> curRow) {
-		curASU = atoi(curRow[ASU].c_str());
-		curLBA = atoi(curRow[LBA].c_str());
-		curSIZE = atoi(curRow[SIZE].c_str());
+		curASU = atol(curRow[ASU].c_str());
+		curLBA = atol(curRow[LBA].c_str());
+		curSIZE = atol(curRow[SIZE].c_str());
 		curTIME = atof(curRow[TIME].c_str())*1000*1000;
 		if(curTIME < (uint64_t)timeIn) continue;
 		if(curTIME > (uint64_t)timeOut) { cout << "Timeout reached." << endl; break; }
@@ -182,7 +182,8 @@ int main(int argc, char *argv[]) {
 		if(curDuration < 0) { cerr << "Error with TX(" << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << "): " << strerror(errno) << endl; break; }
 		totDuration += curDuration;
 		totSpeed += (double)curSIZE / curDuration;
-		outFile << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << ',' << curDuration << endl;
+		cout << "Complete: " << 100*(double)numTX / stats.numTX << "%\r" << flush;
+//		outFile << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << ',' << curDuration << endl;
 		numTX++;
 	}
 	cout << "program runtime  : " << ((double)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count() / 1000) << "s" << endl;
@@ -191,6 +192,6 @@ int main(int argc, char *argv[]) {
 	cout << "avg speed        : " << totSpeed / (1024*1024*numTX) << "MB/s" << endl;
 	cout << "numTX=" << numTX << " read=" << (double)bytesRead/(1024*1024) << "MB wrote=" << (double)bytesWritten/(1024*1024) << "MB" << endl;
 	file.close();
-	outFile.close();
+//	outFile.close();
 	return 0;
 }
