@@ -170,6 +170,7 @@ int main(int argc, char *argv[]) {
 	double totSpeed = 0;
 	uint64_t numTX = 0;
 	startTime = std::chrono::steady_clock::now();
+	int count = 0;
 	while(file >> curRow) {
 		curASU = atol(curRow[ASU].c_str());
 		curLBA = atol(curRow[LBA].c_str());
@@ -179,10 +180,11 @@ int main(int argc, char *argv[]) {
 		if(curTIME > (uint64_t)timeOut) { cout << "Timeout reached." << endl; break; }
 		if(runFast) curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get(), startTime);
 		else curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get(), startTime + std::chrono::microseconds(curTIME));
-		if(curDuration <= 0) { cerr << "Error with TX(" << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << ") = " << curDuration << ": " << strerror(errno) << endl; break; }
+		if(curDuration < 0) { cerr << "Error with TX(" << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << ") = " << curDuration << ": " << strerror(errno) << endl; break; }
 		totDuration += curDuration;
-		totSpeed += (double)curSIZE / curDuration;
-		cout << "Complete: " << 100*(double)numTX / stats.numTX << "%\r" << flush;
+		if(curDuration) totSpeed += (double)curSIZE / curDuration;
+		else totSpeed += (double)curSIZE / 1; // if duration is less than 1uS
+		if(count == 10000) { cout << "Complete: " << 100*(double)numTX / stats.numTX << "%\r" << flush; count = 0; }
 //		outFile << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << ',' << curDuration << endl;
 		numTX++;
 	}
