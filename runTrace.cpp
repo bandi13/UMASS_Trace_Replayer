@@ -179,7 +179,7 @@ int main(int argc, char *argv[]) {
 		if(curTIME > (uint64_t)timeOut) { cout << "Timeout reached." << endl; break; }
 		if(runFast) curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get(), startTime);
 		else curDuration = runTX(fh,curASU*stats.largestOffset+curLBA,curSIZE, ((curRow[OPCODE][0]=='R')||(curRow[OPCODE][0]=='r')) ,bigBuf.get(), startTime + std::chrono::microseconds(curTIME));
-		if(curDuration < 0) { cerr << "Error with TX(" << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << "): " << strerror(errno) << endl; break; }
+		if(curDuration <= 0) { cerr << "Error with TX(" << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << ") = " << curDuration << ": " << strerror(errno) << endl; break; }
 		totDuration += curDuration;
 		totSpeed += (double)curSIZE / curDuration;
 		cout << "Complete: " << 100*(double)numTX / stats.numTX << "%\r" << flush;
@@ -187,10 +187,12 @@ int main(int argc, char *argv[]) {
 		numTX++;
 	}
 	cout << "program runtime  : " << ((double)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count() / 1000) << "s" << endl;
-	cout << "total duration   : " << totDuration << "us" << endl;
-	cout << "avg duration     : " << totDuration / numTX << "us" << endl;
-	cout << "avg speed        : " << totSpeed / (1024*1024*numTX) << "MB/s" << endl;
-	cout << "numTX=" << numTX << " read=" << (double)bytesRead/(1024*1024) << "MB wrote=" << (double)bytesWritten/(1024*1024) << "MB" << endl;
+	if(numTX) {
+		cout << "total duration   : " << totDuration << "us" << endl;
+		cout << "avg duration     : " << totDuration / numTX << "us" << endl;
+		cout << "avg speed        : " << totSpeed / (1024*1024*numTX) << "MB/s" << endl;
+		cout << "numTX=" << numTX << " read=" << (double)bytesRead/(1024*1024) << "MB wrote=" << (double)bytesWritten/(1024*1024) << "MB" << endl;
+	} else { cout << "No transactions executed." << endl; }
 	file.close();
 //	outFile.close();
 	return 0;
