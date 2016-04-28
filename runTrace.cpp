@@ -184,7 +184,7 @@ int main(int argc, char *argv[]) {
 		totDuration += curDuration;
 		if(curDuration) totSpeed += (double)curSIZE / curDuration;
 		else totSpeed += (double)curSIZE / 1; // if duration is less than 1uS
-		if(count == 10000) { cout << "Complete: " << 100*(double)numTX / stats.numTX << "%\r" << flush; count = 0; }
+		if(count++ == 10000) { cout << "Complete: " << 100*(double)numTX / stats.numTX << "%\r" << flush; count = 0; }
 //		outFile << curASU << ',' << curLBA << ',' << curSIZE << ',' << curTIME << ',' << curDuration << endl;
 		numTX++;
 	}
