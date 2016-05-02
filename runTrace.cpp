@@ -103,7 +103,7 @@ int64_t runTX(FILE *fh,uint64_t offset, uint64_t size, bool isRead, char *buf, s
 	if(fseek(fh,offset,SEEK_SET)) return -1;
 	if(isRead) { if(fread(buf,1,size,fh) != size) return -1; bytesRead+=size; }
 	else       { if(fwrite(buf,1,size,fh) != size) return -1; bytesWritten+=size; }
-	return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTime).count();
+	return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - startTime).count();
 }
 
 using namespace std;
@@ -190,9 +190,9 @@ int main(int argc, char *argv[]) {
 	}
 	cout << "program runtime  : " << ((double)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count() / 1000) << "s" << endl;
 	if(numTX) {
-		cout << "total duration   : " << totDuration << "us" << endl;
-		cout << "avg duration     : " << totDuration / numTX << "us" << endl;
-		cout << "avg speed        : " << totSpeed / (1024*1024*numTX) << "MB/s" << endl;
+		cout << "total duration   : " << totDuration / (1000.0) << "us" << endl;
+		cout << "avg duration     : " << totDuration / (1000.0*numTX) << "us" << endl;
+		cout << "avg speed        : " << (1000.0*1000.0*1000.0*totSpeed) / (1024*1024*numTX) << "MB/s" << endl;
 		cout << "numTX=" << numTX << " read=" << (double)bytesRead/(1024*1024) << "MB wrote=" << (double)bytesWritten/(1024*1024) << "MB" << endl;
 	} else { cout << "No transactions executed." << endl; }
 	file.close();
