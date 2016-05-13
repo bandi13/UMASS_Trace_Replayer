@@ -1,7 +1,21 @@
 #!/usr/bin/perl -w
+# Written by: Andras Fekete (C) 2016
+# This program generates using gnuplot a listing of what kinds of
+# transactions occurred on the disks from the UMASS Financial and
+# WebSearch trace files.
+
+# Set these equal to desired starting and ending times
+my $sTime;
+my $eTime;
+
+####################################################################
+## Edit below here only if you know what you're doing
 use strict;
 use autodie qw(:all);
 use File::Basename;
+
+if(!defined($sTime)) { $sTime = ""; }
+if(!defined($eTime)) { $eTime = ""; }
 
 # Generate table that shows the speedup
 foreach my $file(<"*.spc">) {
@@ -17,6 +31,7 @@ foreach my $file(<"*.spc">) {
 		set xlabel "Time (s)"
 		set ytics offset 1
 		set xtics rotate by -45 font ",20"
+		set xrange [$sTime:$eTime]
 EOF
 	if(!-e "$file-ArrOffset.png") {
 		print "Creating $file-ArrOffset.png...\n";
