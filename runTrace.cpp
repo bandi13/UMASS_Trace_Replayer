@@ -28,6 +28,7 @@
 #include <string.h>
 #include <thread>
 #include <iomanip>
+#include <unordered_set>
 
 // class stolen from: http://stackoverflow.com/questions/1120140/how-can-i-read-and-parse-csv-files-in-c
 class CSVRow {
@@ -92,6 +93,28 @@ stats_t getStats(char *fn) {
 	return ret;
 }
 
+#define DIVISOR 6
+double getPercentUnique(char *fn, stats_t &stat) {
+	std::ifstream file(fn);
+	CSVRow curRow;
+	uint64_t curASU;
+	uint64_t curLBA;
+	uint64_t curSIZE;
+	uint64_t end;
+	std::vector<std::unordered_set<uint64_t>> uniqueAccess;
+	uniqueAccess.resize(stat.largestASU + 1);
+	while(file >> curRow) {
+		curASU = atol(curRow[ASU].c_str());
+		curLBA = atol(curRow[LBA].c_str()) >> DIVISOR;
+		curSIZE = (atol(curRow[SIZE].c_str()) >> DIVISOR) + 1;
+		end = curLBA + curSIZE;
+		while(curLBA < end) uniqueAccess[curASU].insert(curLBA++);
+	}
+	uint64_t total = 0;
+	for(end = 0; end < uniqueAccess.size(); end++) total += uniqueAccess[end].size();
+	return (100.0 * total) / (stat.largestASU * (stat.largestOffset >> DIVISOR));
+}
+
 uint64_t bytesRead = 0;
 uint64_t bytesWritten = 0;
 int64_t runTX(FILE *fh,uint64_t offset, uint64_t size, bool isRead, char *buf, std::chrono::steady_clock::time_point beginTime) {
@@ -126,15 +149,16 @@ int main(int argc, char *argv[]) {
 
 	cout << fixed << setw(10) << setprecision(5);
 
-	cout << "Minimum disk size : " << (double)stats.largestASU * stats.largestOffset / (1024*1024*1024) << "GB" << endl;
-	cout << "Data file runtime : " << (uint64_t)floor(stats.largestTIME / (60*60)) << "h " << (uint64_t)floor(stats.largestTIME / 60)%60 << 'm' << endl;
-	cout << "Avg TX per second : " << stats.numTX / stats.largestTIME << endl;
-	cout << "Avg arrival rate  : " << stats.largestTIME / stats.numTX << endl;
-	cout << "True arrival rate : " << stats.deltaT << endl;
-	cout << "Read/Write ratio  : " << (double)stats.numReads / (stats.numTX - stats.numReads) << endl;
-	cout << "Percent Read      : " << 100*(double)stats.numReads / stats.numTX << endl;
-	cout << "Percent Writes    : " << 100*(1 - (double)stats.numReads / stats.numTX) << endl;
-
+	cout << "Minimum disk size    : " << (double)stats.largestASU * stats.largestOffset / (1024*1024*1024) << "GB" << endl;
+	cout << "Data file runtime    : " << (uint64_t)floor(stats.largestTIME / (60*60)) << "h " << (uint64_t)floor(stats.largestTIME / 60)%60 << 'm' << endl;
+	cout << "Avg TX per second    : " << stats.numTX / stats.largestTIME << endl;
+	cout << "Avg arrival rate     : " << stats.largestTIME / stats.numTX << endl;
+	cout << "True arrival rate    : " << stats.deltaT << endl;
+	cout << "Read/Write ratio     : " << (double)stats.numReads / (stats.numTX - stats.numReads) << endl;
+	cout << "Percent Read         : " << 100*(double)stats.numReads / stats.numTX << endl;
+	cout << "Percent Writes       : " << 100*(1 - (double)stats.numReads / stats.numTX) << endl;
+	cout.flush();
+	cout << "Percent UniqueAccess : " << getPercentUnique(argv[1],stats) << endl;
 	cout.flush();
 
 	std::unique_ptr<char[]> bigBuf = std::make_unique<char[]>(stats.largestSIZE);
