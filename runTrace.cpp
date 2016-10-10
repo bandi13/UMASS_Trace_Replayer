@@ -60,6 +60,8 @@ typedef struct {
 	double largestTIME = 0;
 	uint64_t numReads = 0;
 	uint64_t numTX = 0;
+	uint64_t numBlocks = 0;
+	uint64_t numUniqueBlocks = 0;
 	double deltaT = 0;
 } stats_t;
 
@@ -72,11 +74,13 @@ stats_t getStats(char *fn) {
 	uint64_t curSIZE;
 	double curTIME;
 	double lastTIME = 0;
+	std::vector<std::unordered_set<uint64_t>> uniqueAccess;
+	uniqueAccess.resize(1);
 	while(file >> curRow) {
 		curASU = atol(curRow[ASU].c_str());
-		curLBA = atol(curRow[LBA].c_str());
+		curLBA = atol(curRow[LBA].c_str()) * 512;
 		curSIZE = atol(curRow[SIZE].c_str());
-		if(curASU > ret.largestASU) ret.largestASU = curASU;
+		if(curASU > ret.largestASU) { ret.largestASU = curASU; uniqueAccess.resize(curASU+1); }
 		if(curLBA > ret.largestLBA) ret.largestLBA = curLBA;
 		if(curSIZE > ret.largestSIZE) ret.largestSIZE = curSIZE;
 		if(curLBA + curSIZE > ret.largestOffset) ret.largestOffset = curLBA + curSIZE;
@@ -89,30 +93,15 @@ stats_t getStats(char *fn) {
 		if((curRow[OPCODE][0] == 'R') || (curRow[OPCODE][0] == 'r')) ret.numReads++;
 		ret.numTX++;
 
+		curLBA = curLBA / 512;
+		curSIZE = curSIZE / 512;
+		while(curSIZE--) {
+			if(uniqueAccess[curASU].find(curLBA) == uniqueAccess[curASU].end()) ret.numUniqueBlocks++;
+			uniqueAccess[curASU].insert(curLBA++);
+			ret.numBlocks++;
+		}
 	}
 	return ret;
-}
-
-#define DIVISOR 6
-double getPercentUnique(char *fn, stats_t &stat) {
-	std::ifstream file(fn);
-	CSVRow curRow;
-	uint64_t curASU;
-	uint64_t curLBA;
-	uint64_t curSIZE;
-	uint64_t end;
-	std::vector<std::unordered_set<uint64_t>> uniqueAccess;
-	uniqueAccess.resize(stat.largestASU + 1);
-	while(file >> curRow) {
-		curASU = atol(curRow[ASU].c_str());
-		curLBA = atol(curRow[LBA].c_str()) >> DIVISOR;
-		curSIZE = (atol(curRow[SIZE].c_str()) >> DIVISOR) + 1;
-		end = curLBA + curSIZE;
-		while(curLBA < end) uniqueAccess[curASU].insert(curLBA++);
-	}
-	uint64_t total = 0;
-	for(end = 0; end < uniqueAccess.size(); end++) total += uniqueAccess[end].size();
-	return (100.0 * total) / (stat.largestASU * (stat.largestOffset >> DIVISOR));
 }
 
 uint64_t bytesRead = 0;
@@ -157,8 +146,7 @@ int main(int argc, char *argv[]) {
 	cout << "Read/Write ratio     : " << (double)stats.numReads / (stats.numTX - stats.numReads) << endl;
 	cout << "Percent Read         : " << 100*(double)stats.numReads / stats.numTX << endl;
 	cout << "Percent Writes       : " << 100*(1 - (double)stats.numReads / stats.numTX) << endl;
-	cout.flush();
-	cout << "Percent UniqueAccess : " << getPercentUnique(argv[1],stats) << endl;
+	cout << "Percent UniqueAccess : " << 100*(double)stats.numUniqueBlocks / stats.numBlocks << endl;
 	cout.flush();
 
 	std::unique_ptr<char[]> bigBuf = std::make_unique<char[]>(stats.largestSIZE);
