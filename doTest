@@ -1,0 +1,45 @@
+#!/usr/bin/perl -w
+use strict;
+
+my $testProg = "./runTrace";
+my @files=qw( Financial1 Financial2 WebSearch1 WebSearch2 );
+my $now=`date +%Y%m%d_%H%M%S_`;
+chomp($now);
+
+foreach my $curFile (@files) {
+	my $outFile="$now$curFile.log";
+
+	my $FH;
+	open($FH,">$outFile") || die "Can't open $outFile";
+	system("./startRAIDX && sleep 15");
+	print $FH "Without delay:";
+	&doCMD($FH,"$testProg $curFile.spc /dev/nbd0 ". int(-1 * &getTime($curFile) / 2));
+	&doCMD($FH,"$testProg $curFile.spc /dev/nbd0 ". int(&getTime($curFile) / 2) . " " . int(-1*&getTime($curFile)));
+
+	system("./startRAIDX && sleep 15");
+	print $FH "With delay:";
+	&doCMD($FH,"$testProg $curFile.spc /dev/nbd0 ". int(-1 * &getTime($curFile) / 2));
+	&doCMD($FH,"echo Sleeping && sleep 30");
+	&doCMD($FH,"$testProg $curFile.spc /dev/nbd0 ". int(&getTime($curFile) / 2) . " " . int(-1*&getTime($curFile)));
+	close($FH);
+}
+
+sub getTime($) {
+	my $file = shift;
+	if($file eq "Financial1") { return 43713; }
+	if($file eq "Financial2") { return 40991; }
+	if($file eq "WebSearch1") { return 3152; }
+	if($file eq "WebSearch2") { return 15396; }
+	return 0;
+}
+
+sub doCMD($$) {
+	my $FH = shift;
+	my $cmd = shift;
+	my $start = time;
+	print "$cmd\n";
+	print $FH "$cmd\n";
+	my $res = `$cmd`;
+	my $duration = time - $start;
+	print $FH "$res\nDuration: $duration\n";
+} 
